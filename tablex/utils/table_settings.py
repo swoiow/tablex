@@ -2,20 +2,20 @@
 Table Settings – Case‑Optimised (v2025‑07‑01)
 ============================================
 
-This file **supersedes** the draft “Table Settings Final”.
-It merges insights from **Table Settings Old**, **Table Settings Latest** and the
+This file **supersedes** the draft “Table Settings Final”.
+It merges insights from **Table Settings Old**, **Table Settings Latest** and the
 newly‑supplied **case screenshots** (3‑column tables with blank edge cells,
 narrow‑width big tables, right‑top blank cell, etc.).
 
 Key take‑aways from the cases
 -----------------------------
-1. **Narrow big tables** – the table may only span ~35‑55 % of the page width,
+1. **Narrow big tables** – the table may only span ~35‑55 % of the page width,
    but is still the primary structure.  Relying solely on longest horizontal
-   line ≥60 % page width (H_BIG) misses these.
+   line ≥60 % page width (H_BIG) misses these.
 2. **Blank edge columns** – the first or last column can contain *no words*,
    so a *min_words_vertical* ≥1 will break detection.
 3. **Missing top horizontal line** – page break causes the first horizontal
-   line to be absent.  Variants must cope with h‑line count = 0/1.
+   line to be absent.  Variants must cope with h‑line count = 0/1.
 4. **Sub‑tables inside cells** – treat inner lines as noise; keep *edge_min_length*
    relatively high so that only outer borders are considered during the first
    pass.
@@ -25,7 +25,7 @@ Design decisions
 * Keep the **strong → relaxed** ordering, but inject three new variants **before
   the generic fallbacks**.  They explicitly target the corner‑cases above.
 * Lower the *big‑table* heuristics: H_BIG 0.60 → 0.50,  WIDTH_RATIO 0.30 → 0.25.
-* Allow *min_words_vertical = 0* for the new “edge‑blank” variant – this is
+* Allow *min_words_vertical = 0* for the new “edge‑blank” variant – this is
   safe because we still require long vertical lines & an outer bbox check.
 * Re‑export everything via a single helper `iter_table_settings()` so that
   external code does *not* change.
@@ -58,7 +58,7 @@ TABLE_SETTINGS_VARIANTS: List[Tuple[str, Dict[str, Any]]] = [
         "join_tolerance": 6,
         "edge_min_length": 70,
     }),
-    # === ★ 新增：针对窄幅大表 (case #1/#3/#4) =============================
+    # === ★ 新增：针对窄幅大表 (case #1/#3/#4) =============================
     ("lines-lines-narrowbig", {
         "vertical_strategy": "lines",
         "horizontal_strategy": "lines",
@@ -68,7 +68,7 @@ TABLE_SETTINGS_VARIANTS: List[Tuple[str, Dict[str, Any]]] = [
         "edge_min_length": 70,
         "bbox_width_ratio_override": 0.25,  # see helper below
     }),
-    # === ★ 新增：左右空白列 (case #1/#2/#6) ===============================
+    # === ★ 新增：左右空白列 (case #1/#2/#6) ===============================
     ("lines-lines-edgeblank", {
         "vertical_strategy": "lines",
         "horizontal_strategy": "lines",
@@ -79,7 +79,7 @@ TABLE_SETTINGS_VARIANTS: List[Tuple[str, Dict[str, Any]]] = [
         "min_words_vertical": 0,  # allow truly blank cols
         "min_words_horizontal": 2,
     }),
-    # === ★ 新增：缺顶横线，竖线清晰 (case #3) ============================
+    # === ★ 新增：缺顶横线，竖线清晰 (case #3) ============================
     ("explicit-text-missingtop", {
         "vertical_strategy": "explicit",
         "horizontal_strategy": "text",
@@ -202,7 +202,7 @@ def iter_table_settings() -> Iterator[Tuple[str, Dict[str, Any]]]:
     backward compatibility with existing extraction pipelines.
     """
     for name, cfg in TABLE_SETTINGS_VARIANTS:
-        yield name, cfg
+        yield name, _apply_variant_overrides(cfg)
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +218,7 @@ ADAPTIVE_OVERRIDES = dict(
 # A tiny stub showing how a caller could utilise the per‑variant extra keys.
 # Actual scoring/selection lives outside this module!
 
-def _apply_variant_overrides(variant_cfg: Dict[str, Any], page) -> Dict[str, Any]:
+def _apply_variant_overrides(variant_cfg: Dict[str, Any]) -> Dict[str, Any]:
     """Return a copy of *variant_cfg* with any `*_override` keys resolved.
 
     Currently supports only **bbox_width_ratio_override** which replaces the
@@ -228,12 +228,12 @@ def _apply_variant_overrides(variant_cfg: Dict[str, Any], page) -> Dict[str, Any
     override = cfg.pop("bbox_width_ratio_override", None)
     require_top = cfg.pop("require_top_hline", None)
 
-    # 1) narrow‑big override – cached as an attribute for external use
-    if override is not None:
-        cfg["_bbox_width_ratio_override"] = override
-    # 2) missing top‑hline flag for downstream explicit checks
-    if require_top is not None:
-        cfg["_require_top_hline"] = require_top
+    # # 1) narrow‑big override – cached as an attribute for external use
+    # if override is not None:
+    #     cfg["_bbox_width_ratio_override"] = override
+    # # 2) missing top‑hline flag for downstream explicit checks
+    # if require_top is not None:
+    #     cfg["_require_top_hline"] = require_top
 
     return cfg
 
