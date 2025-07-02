@@ -1,5 +1,7 @@
-from typing import Any, List, Tuple, Union
+from typing import Any, List, Tuple
 
+from tablex.utils.cluster import cluster
+from tablex.utils.color import is_dark_color
 from tablex.utils.debug import draw_lines_on_page_plus
 
 
@@ -199,51 +201,3 @@ def ensure_header_line(
             return [inferred_line]
 
     return explicit_h
-
-
-def cluster(coords: List[float], cluster_tol: float = 8.0) -> List[float]:
-    """
-    聚类：将相近坐标归并成一个值（取均值）。如 x=[10, 11, 12, 50]，tol=5 -> 聚为两个中心点
-    """
-    if not coords:
-        return []
-    coords = sorted(coords)
-    clusters = []
-    group = [coords[0]]
-    for c in coords[1:]:
-        if abs(c - group[-1]) <= cluster_tol:
-            group.append(c)
-        else:
-            clusters.append(sum(group) / len(group))
-            group = [c]
-    clusters.append(sum(group) / len(group))
-    return clusters
-
-
-def is_near_black(color: Union[float, int, Tuple[float, ...], List[float]], threshold: float = 0.2) -> bool:
-    """
-    判断颜色是否接近黑色：支持灰度值或 RGB 元组。默认阈值为 0.2。
-    """
-    if isinstance(color, (int, float)):
-        return color < threshold
-    if isinstance(color, (tuple, list)) and len(color) >= 3:
-        return all(c < threshold for c in color[:3])
-    return False
-
-
-def is_dark_color(
-    color: Union[float, int, Tuple[float, ...], List[float]],
-    lum_thresh: float = 0.45,
-) -> bool:
-    """
-    判断颜色是否为“深色边框”：
-        • 灰度值：直接比较
-        • RGB：使用相对亮度 (WCAG) 公式
-    """
-    if isinstance(color, (int, float)):
-        return color < lum_thresh
-    if isinstance(color, (tuple, list)) and len(color) >= 3:
-        r, g, b = color[:3]
-        luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-        return luminance < lum_thresh
-    return False
