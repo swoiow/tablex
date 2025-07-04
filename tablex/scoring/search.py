@@ -23,7 +23,7 @@ Key changes
 import copy
 from typing import Any, Dict, List, Optional, Tuple
 
-from tablex.extract_explicit_lines import v6 as _extractor  # noqa: E402
+from tablex.lines import explicit as _extractor  # noqa: E402
 from tablex.utils.table_settings import iter_table_settings  # updated list
 
 
