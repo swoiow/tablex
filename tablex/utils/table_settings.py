@@ -39,6 +39,16 @@ from typing import Any, Dict, Iterator, List, Tuple
 # ---------------------------------------------------------------------------
 
 TABLE_SETTINGS_VARIANTS: List[Tuple[str, Dict[str, Any]]] = [
+    ("lines-lines-tallcell", {
+        "vertical_strategy": "lines",
+        "horizontal_strategy": "lines",
+        # 对高行/稀疏交叉点更友好
+        "snap_tolerance": 2,
+        "intersection_tolerance": 5,
+        "join_tolerance": 8,
+        "edge_min_length": 60,  # 略放宽，兼顾粗/细线
+        "min_words_horizontal": 1,  # 行里可能只有一个“大”单元格
+    }),
     # --- ❶ 基础强规则 ------------------------------------------------------
     ("lines-lines-strong", {
         "vertical_strategy": "lines",
