@@ -39,16 +39,6 @@ from typing import Any, Dict, Iterator, List, Tuple
 # ---------------------------------------------------------------------------
 
 TABLE_SETTINGS_VARIANTS: List[Tuple[str, Dict[str, Any]]] = [
-    ("lines-lines-tallcell", {
-        "vertical_strategy": "lines",
-        "horizontal_strategy": "lines",
-        # 对高行/稀疏交叉点更友好
-        "snap_tolerance": 2,
-        "intersection_tolerance": 5,
-        "join_tolerance": 8,
-        "edge_min_length": 60,  # 略放宽，兼顾粗/细线
-        "min_words_horizontal": 1,  # 行里可能只有一个“大”单元格
-    }),
     # --- ❶ 基础强规则 ------------------------------------------------------
     ("lines-lines-strong", {
         "vertical_strategy": "lines",
@@ -137,6 +127,27 @@ TABLE_SETTINGS_VARIANTS: List[Tuple[str, Dict[str, Any]]] = [
         "edge_min_length": 100,
         "min_words_horizontal": 1,
         "min_words_vertical": 1,
+    }),
+    ("lines-lines-bigcell", {
+        "vertical_strategy": "lines",
+        "horizontal_strategy": "lines",
+        # —— 容差调大，便于合并相邻水平线，形成高单元格 ——
+        "snap_tolerance": 3,  # 对齐误差容忍
+        "intersection_tolerance": 10,  # 交点偏移容忍
+        "join_tolerance": 12,  # 合并近邻线的距离阈值
+        # —— 辅助阈值 ——
+        "edge_min_length": 50,  # 视为“长”线的最小长度
+        "min_words_horizontal": 0,  # 行内允许 0 个词（避免因缺字被拆分）
+    }),
+    ("lines-lines-tallcell", {
+        "vertical_strategy": "lines",
+        "horizontal_strategy": "lines",
+        # 对高行/稀疏交叉点更友好
+        "snap_tolerance": 2,
+        "intersection_tolerance": 5,
+        "join_tolerance": 8,
+        "edge_min_length": 60,  # 略放宽，兼顾粗/细线
+        "min_words_horizontal": 1,  # 行里可能只有一个“大”单元格
     }),
     ("explicit-explicit", {
         "vertical_strategy": "explicit",
