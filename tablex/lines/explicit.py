@@ -1,7 +1,7 @@
 from typing import Any, Iterable, List, Optional, Tuple
 
 from tablex.utils.cluster import cluster
-from tablex.utils.color import is_dark_color
+from tablex.utils.color import is_dark_and_greyscale_like
 from tablex.utils.debug import draw_lines_on_page_plus
 
 
@@ -165,7 +165,7 @@ def extract_lines_from_page_rects(
             im.draw.rectangle(bbox, outline="red", width=3)
             # im.show()
 
-        if use_color_filter and not is_dark_color(color):
+        if use_color_filter and not is_dark_and_greyscale_like(color):
             continue  # 跳过非黑色边框
 
         # 策略1,使用debug决定：没有效果

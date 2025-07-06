@@ -28,3 +28,34 @@ def is_dark_color(
         luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
         return luminance < lum_thresh
     return False
+
+
+def is_dark_and_greyscale_like(
+    color: Union[float, int, Tuple[float, ...], List[float]],
+    lum_thresh: float = 0.45,
+    grey_tol: float = 0.05,
+) -> bool:
+    """Return True for nearly-black or grey-scale colors.
+
+    Parameters
+    ----------
+    color:
+        Either a grayscale value or RGB tuple in the range ``[0, 1]``.
+    lum_thresh:
+        Maximum luminance considered dark.
+    grey_tol:
+        Allowed channel deviation to still be treated as greyscale.
+    """
+    if isinstance(color, (int, float)):
+        return color < lum_thresh
+
+    if isinstance(color, (tuple, list)) and len(color) >= 3:
+        r, g, b = color[:3]
+
+        if max(abs(r - g), abs(g - b), abs(b - r)) > grey_tol:
+            return False
+
+        luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        return luminance < lum_thresh
+
+    return False
