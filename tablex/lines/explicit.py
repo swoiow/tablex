@@ -1,8 +1,75 @@
-from typing import Any, List, Tuple
+from typing import Any, Iterable, List, Optional, Tuple
 
 from tablex.utils.cluster import cluster
 from tablex.utils.color import is_dark_color
 from tablex.utils.debug import draw_lines_on_page_plus
+
+
+class ExplicitLineExtractor:
+    """Explicit line extractor that allows overriding page primitives."""
+
+    def __init__(
+        self,
+        cluster_tol: float = 10,
+        use_color_filter: bool = True,
+        dump_rects_log: bool = True,
+    ) -> None:
+        self.cluster_tol = cluster_tol
+        self.use_color_filter = use_color_filter
+        self.dump_rects_log = dump_rects_log
+
+    def extract(
+        self,
+        page,
+        *,
+        page_lines: Optional[Iterable[Any]] = None,
+        page_rects: Optional[Iterable[Any]] = None,
+        page_curves: Optional[Iterable[Any]] = None,
+        dump_explicit: bool = False,
+    ) -> Tuple[List[float], List[float]]:
+        """Return clustered explicit vertical and horizontal lines."""
+
+        cluster_tol = self.cluster_tol
+
+        print(f"[INFO] === Page {page.page_number} Start ===")
+
+        raw_v: List[float] = []
+        raw_h: List[float] = []
+
+        # Step 1: lines
+        ev, eh = extract_lines_from_page_lines(page, lines=page_lines)
+        raw_v.extend(ev)
+        raw_h.extend(eh)
+
+        # Step 2: rects
+        ev, eh = extract_lines_from_page_rects(
+            page,
+            use_color_filter=self.use_color_filter,
+            dump_log=self.dump_rects_log,
+            rects=page_rects,
+        )
+        raw_v.extend(ev)
+        raw_h.extend(eh)
+
+        # Step 3: curves
+        ev, eh = extract_lines_from_page_curves(page, curves=page_curves)
+        raw_v.extend(ev)
+        raw_h.extend(eh)
+
+        # Step 4: cluster
+        explicit_v = sorted(cluster(raw_v, cluster_tol=cluster_tol))
+        explicit_h = sorted(cluster(raw_h, cluster_tol=cluster_tol))
+
+        # Step 5: ensure header line
+        explicit_h_pdf_top = ensure_header_line(page, explicit_h, explicit_v, cluster_tol)
+        explicit_h2 = sorted(cluster(explicit_h + explicit_h_pdf_top, cluster_tol=cluster_tol))
+
+        print(f"[INFO] explicit_v={explicit_v}; explicit_h={explicit_h2}")
+        print(f"[INFO] === Page {page.page_number} End ===")
+        if dump_explicit:
+            draw_lines_on_page_plus(page, explicit_v, explicit_h2)
+        return explicit_v, explicit_h2
+
 
 
 def extract_explicit_lines(
@@ -11,6 +78,10 @@ def extract_explicit_lines(
     use_color_filter: bool = True,
     dump_rects_log: bool = True,
     dump_explicit: bool = False,
+    *,
+    page_lines: Optional[Iterable[Any]] = None,
+    page_rects: Optional[Iterable[Any]] = None,
+    page_curves: Optional[Iterable[Any]] = None,
 ) -> Tuple[List[float], List[float]]:
     """
     主函数：融合提取结构性竖线/横线，并返回聚类后的 explicit_v/h。
@@ -25,49 +96,32 @@ def extract_explicit_lines(
         - explicit_v: 所有聚类后的竖线位置（升序）
         - explicit_h: 所有聚类后的横线位置（升序）
     """
-    print(f"[INFO] === Page {page.page_number} Start ===")
-
-    raw_v: List[float] = []
-    raw_h: List[float] = []
-
-    # Step 1: 提取 page.lines 中结构性线段
-    ev, eh = extract_lines_from_page_lines(page)
-    raw_v.extend(ev)
-    raw_h.extend(eh)
-
-    # Step 2: 提取 page.rects 中结构性边框
-    ev, eh = extract_lines_from_page_rects(page, use_color_filter, dump_rects_log)
-    raw_v.extend(ev)
-    raw_h.extend(eh)
-
-    # Step 3: 提取 page.curves 中近似直线
-    ev, eh = extract_lines_from_page_curves(page)
-    raw_v.extend(ev)
-    raw_h.extend(eh)
-
-    # Step 4: 坐标聚类处理，合并相近位置的线段
-    explicit_v = sorted(cluster(raw_v, cluster_tol=cluster_tol))
-    explicit_h = sorted(cluster(raw_h, cluster_tol=cluster_tol))
-
-    # Step 5: 判断是否缺少顶部横线，必要时补全
-    explicit_h_pdf_top = ensure_header_line(page, explicit_h, explicit_v, cluster_tol)
-    explicit_h2 = sorted(cluster(explicit_h + explicit_h_pdf_top, cluster_tol=cluster_tol))
-
-    print(f"[INFO] explicit_v={explicit_v}; explicit_h={explicit_h2}")
-    print(f"[INFO] === Page {page.page_number} End ===")
-    if dump_explicit:
-        draw_lines_on_page_plus(page, explicit_v, explicit_h2)
-    return explicit_v, explicit_h2
+    extractor = ExplicitLineExtractor(
+        cluster_tol=cluster_tol,
+        use_color_filter=use_color_filter,
+        dump_rects_log=dump_rects_log,
+    )
+    return extractor.extract(
+        page,
+        page_lines=page_lines,
+        page_rects=page_rects,
+        page_curves=page_curves,
+        dump_explicit=dump_explicit,
+    )
 
 
-def extract_lines_from_page_lines(page) -> tuple[list[Any], list[Any]]:
+def extract_lines_from_page_lines(
+    page,
+    lines: Optional[Iterable[Any]] = None,
+) -> tuple[list[Any], list[Any]]:
     """
     提取 page.lines 中结构性横线（长）和竖线（高），返回坐标列表。
     横线条件：接近水平且长度 > 页宽 75%；竖线条件：接近竖直且高度 > 页高 35%
     """
     W, H = page.width, page.height
     bucket_v, bucket_h = [], []
-    for l in page.lines:
+    lines = list(page.lines if lines is None else lines)
+    for l in lines:
         dx, dy = l["x1"] - l["x0"], l["y1"] - l["y0"]
         length = (dx ** 2 + dy ** 2) ** 0.5  # 计算线段长度
         if abs(dy) <= 2 and length >= W * 0.75:
@@ -83,6 +137,8 @@ def extract_lines_from_page_rects(
     dump_log: bool = True,
     simple_draw=False,
     power_draw=False,
+    *,
+    rects: Optional[Iterable[Any]] = None,
 ) -> tuple[list[Any], list[Any]]:
     """
     提取 page.rects 中的结构线（粗竖线或长横线），返回坐标列表。
@@ -90,10 +146,11 @@ def extract_lines_from_page_rects(
     """
     W, H = page.width, page.height
     bucket_v, bucket_h = [], []
+    rects = list(page.rects if rects is None else rects)
     if dump_log:
-        print(f"[DEBUG] page.rects:\n{page.rects}\n")
+        print(f"[DEBUG] page.rects:\n{rects}\n")
 
-    for r in page.rects:
+    for r in rects:
         rw, rh = r["x1"] - r["x0"], r["y1"] - r["y0"]  # 计算矩形宽高
         color = r.get("non_stroking_color", 0.0)
         if dump_log and (simple_draw or power_draw):
@@ -124,13 +181,17 @@ def extract_lines_from_page_rects(
     return cluster(bucket_v), cluster(bucket_h)
 
 
-def extract_lines_from_page_curves(page) -> tuple[list[Any], list[Any]]:
+def extract_lines_from_page_curves(
+    page,
+    curves: Optional[Iterable[Any]] = None,
+) -> tuple[list[Any], list[Any]]:
     """
     提取 page.curves 中近似水平或竖直的曲线段，返回坐标列表。
     """
-    print(f"[DEBUG] page.curves:\n{page.curves}\n")
+    curves = list(getattr(page, "curves", []) if curves is None else curves)
+    print(f"[DEBUG] page.curves:\n{curves}\n")
     bucket_v, bucket_h = [], []
-    for c in getattr(page, "curves", []):
+    for c in curves:
         if abs(c["x1"] - c["x0"]) < 1:
             bucket_v.extend([c["x0"], c["x1"]])  # 近似竖线
         if abs(c["y1"] - c["y0"]) < 1:
