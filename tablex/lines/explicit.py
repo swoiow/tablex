@@ -36,31 +36,31 @@ class ExplicitLineExtractor:
         raw_v: List[float] = []
         raw_h: List[float] = []
 
-        # Step 1: lines
-        ev, eh = extract_lines_from_page_lines(page, lines=page_lines)
-        raw_v.extend(ev)
-        raw_h.extend(eh)
+        # Step 1: 提取 page.lines 中结构性线段
+        ev0, eh0 = extract_lines_from_page_lines(page, lines=page_lines)
+        raw_v.extend(ev0)
+        raw_h.extend(eh0)
 
-        # Step 2: rects
-        ev, eh = extract_lines_from_page_rects(
+        # Step 2: 提取 page.rects 中结构性边框
+        ev1, eh1 = extract_lines_from_page_rects(
             page,
             use_color_filter=self.use_color_filter,
             dump_log=self.dump_rects_log,
             rects=page_rects,
         )
-        raw_v.extend(ev)
-        raw_h.extend(eh)
+        raw_v.extend(ev1)
+        raw_h.extend(eh1)
 
-        # Step 3: curves
-        ev, eh = extract_lines_from_page_curves(page, curves=page_curves)
-        raw_v.extend(ev)
-        raw_h.extend(eh)
+        # Step 3: 提取 page.curves 中近似直线
+        ev2, eh2 = extract_lines_from_page_curves(page, curves=page_curves)
+        raw_v.extend(ev2)
+        raw_h.extend(eh2)
 
-        # Step 4: cluster
+        # Step 4: 坐标聚类处理，合并相近位置的线段
         explicit_v = sorted(cluster(raw_v, cluster_tol=cluster_tol))
         explicit_h = sorted(cluster(raw_h, cluster_tol=cluster_tol))
 
-        # Step 5: ensure header line
+        # Step 5: 判断是否缺少顶部横线，必要时补全
         explicit_h_pdf_top = ensure_header_line(page, explicit_h, explicit_v, cluster_tol)
         explicit_h2 = sorted(cluster(explicit_h + explicit_h_pdf_top, cluster_tol=cluster_tol))
 
@@ -68,8 +68,16 @@ class ExplicitLineExtractor:
         print(f"[INFO] === Page {page.page_number} End ===")
         if dump_explicit:
             draw_lines_on_page_plus(page, explicit_v, explicit_h2)
-        return explicit_v, explicit_h2
 
+        if (not explicit_v) or (not explicit_h2):
+            ev0, eh0 = extract_lines_from_page_lines(page, plus=True)
+            raw_v.extend(ev0)
+            raw_h.extend(eh0)
+            explicit_v = sorted(cluster(raw_v, cluster_tol=cluster_tol))
+            explicit_h2 = sorted(cluster(raw_h, cluster_tol=cluster_tol))
+            print("兼容")
+
+        return explicit_v, explicit_h2
 
 
 def extract_explicit_lines(
@@ -113,10 +121,11 @@ def extract_explicit_lines(
 def extract_lines_from_page_lines(
     page,
     lines: Optional[Iterable[Any]] = None,
+    plus=False,
 ) -> tuple[list[Any], list[Any]]:
     """
     提取 page.lines 中结构性横线（长）和竖线（高），返回坐标列表。
-    横线条件：接近水平且长度 > 页宽 75%；竖线条件：接近竖直且高度 > 页高 35%
+    横线条件：接近水平且长度 > 页宽 70%；竖线条件：接近竖直且高度 > 页高 25%
     """
     W, H = page.width, page.height
     bucket_v, bucket_h = [], []
@@ -124,10 +133,22 @@ def extract_lines_from_page_lines(
     for l in lines:
         dx, dy = l["x1"] - l["x0"], l["y1"] - l["y0"]
         length = (dx ** 2 + dy ** 2) ** 0.5  # 计算线段长度
-        if abs(dy) <= 2 and length >= W * 0.75:
-            bucket_h.append(l["y0"])  # 保留水平线 y 坐标
-        elif abs(dx) <= 2 and length >= H * 0.35:
+        if abs(dy) <= 2 and length >= W * 0.70:
+            # TODO|<TASK1>: 究竟是用 l["y0"] 还是 H - l["y0"] 这是个谜
+            bucket_h.append(H - l["y0"])  # 保留水平线 y 坐标
+        elif abs(dx) <= 2 and length >= H * 0.25:
             bucket_v.append(l["x0"])  # 保留竖直线 x 坐标
+
+    if plus:  # 通过edges获取边框, 非必要
+        try:
+            if not bucket_h:
+                edge_h = [l["bottom"] for l in page.rects]
+                bucket_h = [max(edge_h), min(edge_h)]
+            if not bucket_v:
+                edge_v = [l["x0"] for l in page.rects]
+                bucket_v = [max(edge_v), min(edge_v)]
+        except ValueError:
+            raise RuntimeWarning("警告：此页没有表格！")
     return bucket_v, bucket_h
 
 
@@ -150,7 +171,7 @@ def extract_lines_from_page_rects(
     if dump_log:
         print(f"[DEBUG] page.rects：\n{rects}\n")
 
-    for r in rects:
+    for ix, r in enumerate(page.rects):
         rw, rh = r["x1"] - r["x0"], r["y1"] - r["y0"]  # 计算矩形宽高
         color = r.get("non_stroking_color", 0.0)
         if dump_log and (simple_draw or power_draw):
@@ -165,7 +186,7 @@ def extract_lines_from_page_rects(
             im.draw.rectangle(bbox, outline="red", width=3)
             # im.show()
 
-        if use_color_filter and not is_dark_and_greyscale_like(color):
+        if use_color_filter and (not is_dark_and_greyscale_like(color)):
             continue  # 跳过非黑色边框
 
         # 策略1,使用debug决定：没有效果
@@ -176,7 +197,8 @@ def extract_lines_from_page_rects(
         # return bucket_v, bucket_h
 
         # 策略2,使用debug决定：page.rects属于点-线融合
-        bucket_h.extend([r["y0"], r["y1"]])  # 横线 y 坐标
+        # TODO|<TASK1>: 究竟是用 [r["y0"], r["y1"]] 还是 [H - r["y0"], H - r["y1"]] 这是个谜
+        bucket_h.extend([H - r["y0"], H - r["y1"]])  # 横线 y 坐标
         bucket_v.extend([r["x0"], r["x1"]])  # 竖线 x 坐标
     return cluster(bucket_v), cluster(bucket_h)
 
