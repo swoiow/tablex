@@ -319,19 +319,19 @@ def get_horizon_edges(
     return h_edges
 
 
-def get_large_table_hlines(page, cfg: BoundConfig = CFG) -> List[float]:
-    min_line_ratio = 0.88
+def get_large_table_hlines(page, cfg: BoundConfig = CFG, do_fallback=False) -> List[float]:
+    min_line_ratio = 0.875 if (not do_fallback) else 0.75
     result = set()
 
     raw_v, raw_h = _extract_raw_lines(page, cfg)
     v_lines = cluster(raw_v)
     min_x, max_x = min(v_lines), max(v_lines)
     # draw_lines_on_page_plus(page,v_lines=[min_x, max_x],h_lines=[])
-    guess_table_width = div(max_x - min_x)
+    min_table_width = div(max_x - min_x) * min_line_ratio
 
     for y, length, color in _iter_h_edges_with_y(page, cfg):
-        if length > guess_table_width * min_line_ratio:
+        if (length > min_table_width) and (not _is_white(color)):
             result.add(y)
 
-    result = sorted(cluster(result))
-    return result
+    r = sorted(cluster(result))
+    return r

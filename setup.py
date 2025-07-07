@@ -3,7 +3,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="tablex",
-    version="0.1.0",
+    version="0.1.2",
     description="A PDF table structure extractor using explicit and implicit line analysis.",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
