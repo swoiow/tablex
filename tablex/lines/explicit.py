@@ -148,7 +148,7 @@ def extract_lines_from_page_rects(
     bucket_v, bucket_h = [], []
     rects = list(page.rects if rects is None else rects)
     if dump_log:
-        print(f"[DEBUG] page.rects:\n{rects}\n")
+        print(f"[DEBUG] page.rects：\n{rects}\n")
 
     for r in rects:
         rw, rh = r["x1"] - r["x0"], r["y1"] - r["y0"]  # 计算矩形宽高
@@ -189,7 +189,7 @@ def extract_lines_from_page_curves(
     提取 page.curves 中近似水平或竖直的曲线段，返回坐标列表。
     """
     curves = list(getattr(page, "curves", []) if curves is None else curves)
-    print(f"[DEBUG] page.curves:\n{curves}\n")
+    print(f"[DEBUG] page.curves：\n{curves}\n")
     bucket_v, bucket_h = [], []
     for c in curves:
         if abs(c["x1"] - c["x0"]) < 1:
@@ -219,7 +219,7 @@ def ensure_header_line(
     # 顶部判断器，使用 draw_lines_on_page_plus(page, v_lines=[], h_lines=[y_min, y_max])
     y_min, y_max = H * 0.1, H * 0.2
     header_missing = all(not (y_min <= y <= y_max) for y in explicit_h)
-    print(f"[DEBUG] Header line missing: {header_missing}")
+    print(f"[DEBUG] 表头线缺失：{header_missing}")
 
     if not header_missing or not explicit_h:
         return []
