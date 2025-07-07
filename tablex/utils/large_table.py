@@ -47,6 +47,7 @@ def _extract_raw_lines(page, cfg: BoundConfig) -> Tuple[List[float], List[float]
     if DEBUG:
         print(f"[DEBUG] 线条数量={len(page.lines)}，竖线候选={len(v_bucket)}，横线候选={len(h_bucket)}")
 
+
     # 从 rect 中提取左右、上下边界
     for rc in page.rects:
         v_bucket.extend([div(rc["x0"]), div(rc["x1"])])
@@ -54,6 +55,7 @@ def _extract_raw_lines(page, cfg: BoundConfig) -> Tuple[List[float], List[float]
 
     if DEBUG:
         print(f"[DEBUG] 矩形贡献{len(page.rects) * 2}个坐标")
+
 
     # 从 curves 中提取结构线
     for cv in getattr(page, "curves", []):
@@ -63,8 +65,8 @@ def _extract_raw_lines(page, cfg: BoundConfig) -> Tuple[List[float], List[float]
             h_bucket.extend([div(H - cv["y0"]), div(H - cv["y1"])])
 
     if DEBUG:
-        print(f"[DEBUG] 曲线贡献竖线={len(v_bucket)}，横线={len(h_bucket)}")
-        print(f"[DEBUG] 原始横线位置(排序): {sorted(h_bucket)}")
+        print(f"[DEBUG] Curves：原始 v_bucket 总数={len(v_bucket)}，原始 h_bucket={len(h_bucket)}")
+        print(f"[DEBUG] raw_h 值（排序后）：{sorted(h_bucket)}")
 
     return v_bucket, h_bucket
 
@@ -82,21 +84,23 @@ def _collect_vertical_edges(page, cfg: BoundConfig) -> List[Tuple[float, float]]
             edges.append((div(ln["x0"]), div(abs(ln["y1"] - ln["y0"]))))
 
     if DEBUG:
-        print(f"[DEBUG] 从线条收集，共{len(page.lines)}条")
+        print(f"[DEBUG] Lines：收集自{len(page.lines)}条线")
+
 
     for rc in page.rects:
         height = div(rc["y1"] - rc["y0"])
         edges.extend([(div(rc["x0"]), height), (div(rc["x1"]), height)])
 
     if DEBUG:
-        print(f"[DEBUG] 从矩形收集{len(page.rects)}个，累计={len(edges)}")
+        print(f"[DEBUG] Rects：收集自{len(page.rects)}个矩形，总计={len(edges)}")
 
     for cv in getattr(page, "curves", []):
         if abs(cv["x1"] - cv["x0"]) <= cfg.dx_tol:
             edges.append((div(cv["x0"]), div(abs(cv["y1"] - cv["y0"]))))
 
     if DEBUG:
-        print(f"[DEBUG] 曲线处理后垂直边总数={len(edges)}")
+        print(f"[DEBUG] Curves：垂直边总数={len(edges)}")
+
 
     return edges
 
@@ -140,12 +144,12 @@ def _has_dark_longline(page, exp_len: float, cfg: BoundConfig, y_band: Tuple[flo
     for y_pt, length, color in _iter_h_edges_with_y(page, cfg):
         if y_ok(y_pt):
             if DEBUG:
-                print(f"[DEBUG] 边线@{y_pt}: 长度={length}, 颜色={color}")
+                print(f"[DEBUG] 边@{y_pt}：长度={length}，颜色={color}")
             if abs(length - exp_len) <= tol_len and is_dark_and_greyscale_like(color):
-                print("[DEBUG] 找到符合条件的深色长线")
+                print("[DEBUG] 找到符合条件的黑色长横线")
                 return True
 
-    print("[DEBUG] 未找到符合条件的深色长线")
+    print("[DEBUG] 未找到符合条件的黑色长横线")
     return False
 
 
@@ -179,10 +183,10 @@ def _vertical_top_aligned(page, left_x: float, right_x: float, cfg: BoundConfig)
         diff = abs(heap_left[0] - heap_right[0])
         aligned = diff <= tol_y
         if DEBUG:
-            print(f"[DEBUG] 顶部对齐差异={diff}，是否对齐={aligned}")
+            print(f"[DEBUG] 顶部对齐差值={diff}，是否对齐={aligned}")
         return aligned
 
-    print("[DEBUG] 顶部对齐判断线条不足")
+    print("[DEBUG] 用于顶部对齐的线迹不足")
     return False
 
 
@@ -197,7 +201,7 @@ def has_large_table(page, cfg: BoundConfig = CFG) -> bool:
 
     edges = _collect_vertical_edges(page, cfg)
     if not edges:
-        print("[DEBUG] 没有边线，直接返回")
+        print("[DEBUG] 无边线：提前结束")
         return False
 
     max_h = max(h for _, h in edges)
@@ -248,7 +252,7 @@ def has_large_table(page, cfg: BoundConfig = CFG) -> bool:
             for y_pt, length, color in _iter_h_edges_with_y(page, cfg):
                 if abs(y_pt - max_cluster_y) <= tol_y and is_dark_and_greyscale_like(color):
                     if DEBUG:
-                        print(f"[DEBUG] 备用检查：簇底部深色线 y={y_pt}")
+                        print(f"[DEBUG] 回退：聚类底部黑线于 y={y_pt}")
                     return True
 
         max_top = max(y for y in h_lines if y <= top_max + tol_y)
@@ -259,6 +263,7 @@ def has_large_table(page, cfg: BoundConfig = CFG) -> bool:
     # 情况 4：只有底部时，检查左右边是否顶部对齐
     if has_bot and not has_top:
         print("[DEBUG] 仅出现底部：检查左右对齐")
+
         if _vertical_top_aligned(page, left_x, right_x, cfg):
             return True
 
