@@ -1,9 +1,9 @@
 import heapq
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 from tablex.utils.cluster import cluster
-from tablex.utils.color import is_dark_and_greyscale_like
+from tablex.utils.color import _is_white, is_dark_and_greyscale_like
 from tablex.utils.debug import draw_lines_on_page_plus  # noqa
 
 
@@ -28,7 +28,7 @@ class BoundConfig:
 CFG = BoundConfig()
 
 
-def _extract_raw_lines(page, cfg: BoundConfig) -> Tuple[List[float], List[float]]:
+def _extract_raw_lines(page, cfg: BoundConfig = CFG) -> Tuple[List[float], List[float]]:
     """提取所有结构线段（直线、rect、curve）的横纵坐标点"""
     H = page.height
     v_bucket, h_bucket = [], []
@@ -47,7 +47,6 @@ def _extract_raw_lines(page, cfg: BoundConfig) -> Tuple[List[float], List[float]
     if DEBUG:
         print(f"[DEBUG] 线条数量={len(page.lines)}，竖线候选={len(v_bucket)}，横线候选={len(h_bucket)}")
 
-
     # 从 rect 中提取左右、上下边界
     for rc in page.rects:
         v_bucket.extend([div(rc["x0"]), div(rc["x1"])])
@@ -55,7 +54,6 @@ def _extract_raw_lines(page, cfg: BoundConfig) -> Tuple[List[float], List[float]
 
     if DEBUG:
         print(f"[DEBUG] 矩形贡献{len(page.rects) * 2}个坐标")
-
 
     # 从 curves 中提取结构线
     for cv in getattr(page, "curves", []):
@@ -71,7 +69,7 @@ def _extract_raw_lines(page, cfg: BoundConfig) -> Tuple[List[float], List[float]
     return v_bucket, h_bucket
 
 
-def _collect_vertical_edges(page, cfg: BoundConfig) -> List[Tuple[float, float]]:
+def _collect_vertical_edges(page, cfg: BoundConfig = CFG) -> List[Tuple[float, float]]:
     """收集所有垂直边（含高度信息）"""
     edges = []
     H = page.height
@@ -86,7 +84,6 @@ def _collect_vertical_edges(page, cfg: BoundConfig) -> List[Tuple[float, float]]
     if DEBUG:
         print(f"[DEBUG] Lines：收集自{len(page.lines)}条线")
 
-
     for rc in page.rects:
         height = div(rc["y1"] - rc["y0"])
         edges.extend([(div(rc["x0"]), height), (div(rc["x1"]), height)])
@@ -100,7 +97,6 @@ def _collect_vertical_edges(page, cfg: BoundConfig) -> List[Tuple[float, float]]
 
     if DEBUG:
         print(f"[DEBUG] Curves：垂直边总数={len(edges)}")
-
 
     return edges
 
@@ -295,3 +291,47 @@ def get_large_table_vlines(page, cfg: BoundConfig = CFG) -> List[float]:
 
     # 4. 聚类合并相近线条并排序
     return sorted(cluster(xs, tol_x))
+
+
+def get_horizon_edges(
+    page,
+    cfg: BoundConfig = CFG,
+) -> List[Tuple[float, float, Any]]:
+    """
+    收集页面中所有“非白色”水平线。
+
+    返回值
+    ----
+    List[Tuple[y_pt, length, color]]
+        • y_pt   : 以页面左下角为原点时的 y 坐标（已经经过 div 归一化）
+        • length : 线段长度（经过 div 归一化，与源码保持一致）
+        • color  : 原始颜色对象，便于后续调试或进一步分类
+    """
+    # 利用现有生成器抽取所有水平线
+    h_edges = [
+        (y_pt, length, color)
+        for y_pt, length, color in _iter_h_edges_with_y(page, cfg)
+        if not _is_white(color)
+    ]
+
+    # 按 y 坐标从小到大排序，方便查看
+    h_edges.sort(key=lambda t: t[0])
+    return h_edges
+
+
+def get_large_table_hlines(page, cfg: BoundConfig = CFG) -> List[float]:
+    min_line_ratio = 0.88
+    result = set()
+
+    raw_v, raw_h = _extract_raw_lines(page, cfg)
+    v_lines = cluster(raw_v)
+    min_x, max_x = min(v_lines), max(v_lines)
+    # draw_lines_on_page_plus(page,v_lines=[min_x, max_x],h_lines=[])
+    guess_table_width = div(max_x - min_x)
+
+    for y, length, color in _iter_h_edges_with_y(page, cfg):
+        if length > guess_table_width * min_line_ratio:
+            result.add(y)
+
+    result = sorted(cluster(result))
+    return result
