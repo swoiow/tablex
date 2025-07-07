@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union
+from typing import Any, List, Tuple, Union
 
 
 def is_near_black(color: Union[float, int, Tuple[float, ...], List[float]], threshold: float = 0.2) -> bool:
@@ -58,4 +58,28 @@ def is_dark_and_greyscale_like(
         luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
         return luminance < lum_thresh
 
+    return False
+
+
+def _is_white(color: Any, thr: float = 0.9) -> bool:
+    """
+    判断颜色是否接近白色。
+
+    pdfplumber 的颜色表示可能是：
+      • 0-1 之间的灰度值（float / int）
+      • RGB 三元组 (r, g, b)，每个分量 0-1
+      • None（极少出现，表示使用当前绘图颜色），此处统一视为“非白”
+    参数
+    ----
+    color : Any
+        pdfplumber 提取到的颜色对象
+    thr : float
+        判断“接近白色”的阈值，默认 0.95
+    """
+    if color is None:
+        return False
+    if isinstance(color, (int, float)):
+        return color >= thr
+    if isinstance(color, (list, tuple)):
+        return all(c >= thr for c in color)
     return False
