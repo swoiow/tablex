@@ -11,13 +11,13 @@ DEBUG = 0
 
 
 def div(a: float, b: float = 1.0) -> float:
-    """Safe division with rounding."""
+    """安全除法并四舍五入"""
     return round(a / b, 5) if b != 0 else 0.0
 
 
 @dataclass(slots=True)
 class BoundConfig:
-    top: Tuple[float, float] = (0.10, 0.18)
+    top: Tuple[float, float] = (0.10, 0.22)
     side: Tuple[float, float] = (0.10, 0.90)
     bottom: Tuple[float, float] = (0.80, 0.92)
     tol_ratio: float = 0.015
@@ -34,7 +34,7 @@ def _extract_raw_lines(page, cfg: BoundConfig) -> Tuple[List[float], List[float]
     v_bucket, h_bucket = [], []
 
     if DEBUG:
-        print(f"[DEBUG] _extract_raw_lines: page height={H}")
+        print(f"[DEBUG] _extract_raw_lines：页面高度={H}")
 
     # 从 lines 中提取竖线和横线
     for ln in page.lines:
@@ -45,7 +45,7 @@ def _extract_raw_lines(page, cfg: BoundConfig) -> Tuple[List[float], List[float]
             h_bucket.append(div(H - ln["y0"]))
 
     if DEBUG:
-        print(f"[DEBUG] Lines: found {len(page.lines)} lines, v_bucket={len(v_bucket)}, h_bucket={len(h_bucket)}")
+        print(f"[DEBUG] 线条数量={len(page.lines)}，竖线候选={len(v_bucket)}，横线候选={len(h_bucket)}")
 
     # 从 rect 中提取左右、上下边界
     for rc in page.rects:
@@ -53,7 +53,7 @@ def _extract_raw_lines(page, cfg: BoundConfig) -> Tuple[List[float], List[float]
         h_bucket.extend([div(H - rc["y0"]), div(H - rc["y1"])])
 
     if DEBUG:
-        print(f"[DEBUG] Rects: added {len(page.rects) * 2} coords")
+        print(f"[DEBUG] 矩形贡献{len(page.rects) * 2}个坐标")
 
     # 从 curves 中提取结构线
     for cv in getattr(page, "curves", []):
@@ -63,8 +63,8 @@ def _extract_raw_lines(page, cfg: BoundConfig) -> Tuple[List[float], List[float]
             h_bucket.extend([div(H - cv["y0"]), div(H - cv["y1"])])
 
     if DEBUG:
-        print(f"[DEBUG] Curves: total raw v_bucket={len(v_bucket)}, raw h_bucket={len(h_bucket)}")
-        print(f"[DEBUG] raw_h values (sorted): {sorted(h_bucket)}")
+        print(f"[DEBUG] 曲线贡献竖线={len(v_bucket)}，横线={len(h_bucket)}")
+        print(f"[DEBUG] 原始横线位置(排序): {sorted(h_bucket)}")
 
     return v_bucket, h_bucket
 
@@ -75,34 +75,34 @@ def _collect_vertical_edges(page, cfg: BoundConfig) -> List[Tuple[float, float]]
     H = page.height
 
     if DEBUG:
-        print(f"[DEBUG] _collect_vertical_edges: page height={H}")
+        print(f"[DEBUG] _collect_vertical_edges：页面高度={H}")
 
     for ln in page.lines:
         if abs(ln["x1"] - ln["x0"]) <= cfg.dx_tol:
             edges.append((div(ln["x0"]), div(abs(ln["y1"] - ln["y0"]))))
 
     if DEBUG:
-        print(f"[DEBUG] Lines: collected from {len(page.lines)} lines")
+        print(f"[DEBUG] 从线条收集，共{len(page.lines)}条")
 
     for rc in page.rects:
         height = div(rc["y1"] - rc["y0"])
         edges.extend([(div(rc["x0"]), height), (div(rc["x1"]), height)])
 
     if DEBUG:
-        print(f"[DEBUG] Rects: collected from {len(page.rects)} rects, total={len(edges)}")
+        print(f"[DEBUG] 从矩形收集{len(page.rects)}个，累计={len(edges)}")
 
     for cv in getattr(page, "curves", []):
         if abs(cv["x1"] - cv["x0"]) <= cfg.dx_tol:
             edges.append((div(cv["x0"]), div(abs(cv["y1"] - cv["y0"]))))
 
     if DEBUG:
-        print(f"[DEBUG] Curves: total vertical edges={len(edges)}")
+        print(f"[DEBUG] 曲线处理后垂直边总数={len(edges)}")
 
     return edges
 
 
 def _iter_h_edges_with_y(page, cfg: BoundConfig):
-    """Yield y_pt, length, color for all horizontal edges (lines, rects, curves)."""
+    """遍历所有水平边缘，返回 y 坐标、长度和颜色"""
     H = page.height
 
     for ln in page.lines:
@@ -140,12 +140,12 @@ def _has_dark_longline(page, exp_len: float, cfg: BoundConfig, y_band: Tuple[flo
     for y_pt, length, color in _iter_h_edges_with_y(page, cfg):
         if y_ok(y_pt):
             if DEBUG:
-                print(f"[DEBUG] Edge@{y_pt}: length={length}, color={color}")
+                print(f"[DEBUG] 边线@{y_pt}: 长度={length}, 颜色={color}")
             if abs(length - exp_len) <= tol_len and is_dark_and_greyscale_like(color):
-                print("[DEBUG] Found dark long line matching criteria")
+                print("[DEBUG] 找到符合条件的深色长线")
                 return True
 
-    print("[DEBUG] No matching dark long line found")
+    print("[DEBUG] 未找到符合条件的深色长线")
     return False
 
 
@@ -179,10 +179,10 @@ def _vertical_top_aligned(page, left_x: float, right_x: float, cfg: BoundConfig)
         diff = abs(heap_left[0] - heap_right[0])
         aligned = diff <= tol_y
         if DEBUG:
-            print(f"[DEBUG] Top alignment diff={diff}, aligned={aligned}")
+            print(f"[DEBUG] 顶部对齐差异={diff}，是否对齐={aligned}")
         return aligned
 
-    print("[DEBUG] Not enough traces for top alignment")
+    print("[DEBUG] 顶部对齐判断线条不足")
     return False
 
 
@@ -197,21 +197,34 @@ def has_large_table(page, cfg: BoundConfig = CFG) -> bool:
 
     edges = _collect_vertical_edges(page, cfg)
     if not edges:
-        print("[DEBUG] No edges: bail out")
+        print("[DEBUG] 没有边线，直接返回")
         return False
 
     max_h = max(h for _, h in edges)
     h_thr = div(max_h * (1 - cfg.tol_ratio))
     left_thr, right_thr = div(W * cfg.side[0]), div(W * cfg.side[1])
 
+    # 利用 virtual_v 合并靠近的竖线高度信息
+    tol_x = div(W * cfg.tol_ratio)
+    virtual_v = cluster([x for x, _ in edges] + v_lines, tol_x)
+    virtual_edges: List[Tuple[float, float]] = []
+    for x_cluster in virtual_v:
+        nearby_h = [h for x, h in edges if abs(x - x_cluster) <= tol_x]
+        if not nearby_h:
+            continue
+        max_h_cluster = max(nearby_h)
+        virtual_edges.append((x_cluster, max_h_cluster))
+    edges.extend(virtual_edges)
+
     has_left = any(x <= left_thr and h >= h_thr for x, h in edges)
-    has_right = any(x >= right_thr and h >= h_thr for x, h in edges)
+    has_right = any(x >= right_thr and h >= max_h * 0.35 for x, h in edges)
 
     if not (has_left and has_right):
+        print("[DEBUG] 两边没有线段")
         return False
 
     left_x = min(x for x, h in edges if x <= left_thr and h >= h_thr)
-    right_x = max(x for x, h in edges if x >= right_thr and h >= h_thr)
+    right_x = max(x for x, h in edges if x >= right_thr and h >= max_h * 0.35)
     exp_len = div(right_x - left_x)
 
     top_min, top_max = div(H * cfg.top[0]), div(H * cfg.top[1])
@@ -235,7 +248,7 @@ def has_large_table(page, cfg: BoundConfig = CFG) -> bool:
             for y_pt, length, color in _iter_h_edges_with_y(page, cfg):
                 if abs(y_pt - max_cluster_y) <= tol_y and is_dark_and_greyscale_like(color):
                     if DEBUG:
-                        print(f"[DEBUG] Fallback: cluster bottom dark line at y={y_pt}")
+                        print(f"[DEBUG] 备用检查：簇底部深色线 y={y_pt}")
                     return True
 
         max_top = max(y for y in h_lines if y <= top_max + tol_y)
@@ -245,8 +258,35 @@ def has_large_table(page, cfg: BoundConfig = CFG) -> bool:
 
     # 情况 4：只有底部时，检查左右边是否顶部对齐
     if has_bot and not has_top:
-        print("[DEBUG] Only bottom: checking vertical alignment")
+        print("[DEBUG] 仅出现底部：检查左右对齐")
         if _vertical_top_aligned(page, left_x, right_x, cfg):
             return True
 
+    print("[DEBUG] 最后返回False")
     return False
+
+
+def get_large_table_vlines(page, cfg: BoundConfig = CFG) -> List[float]:
+    """获取大表格的竖线（x 坐标）"""
+
+    # 1. 获取所有竖线边缘
+    edges = _collect_vertical_edges(page, cfg)
+    if not edges:
+        return []
+
+    # 2. 过滤出接近最高的线条
+    max_h = max(h for _, h in edges)
+    h_thr = div(max_h * (1 - cfg.tol_ratio))
+    tall = [(x, h) for x, h in edges if h >= h_thr]
+    if len(tall) < 2:
+        return []
+
+    tol_x = div(page.width * cfg.tol_ratio)
+    left_x = min(x for x, _ in tall)
+    right_x = max(x for x, _ in tall)
+
+    # 3. 只保留主要左右边界之间的线
+    xs = [x for x, _ in tall if (left_x - tol_x) <= x <= (right_x + tol_x)]
+
+    # 4. 聚类合并相近线条并排序
+    return sorted(cluster(xs, tol_x))
